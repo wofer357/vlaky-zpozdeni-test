@@ -3,9 +3,9 @@ export default async function handler(req, res) {
 
     try {
         const commonParams = {
-            minutesBefore: 10,
-            minutesAfter: 180, 
-            limit: 40,
+            minutesBefore: 60, // Zvýšeno pro debug, abychom něco našli i v noci
+            minutesAfter: 240, 
+            limit: 60,
             includeDelay: true 
         };
 
@@ -14,7 +14,6 @@ export default async function handler(req, res) {
         const paramsDejDep = new URLSearchParams({ ...commonParams, names: 'Praha-Dejvice', mode: 'departures' });
         const paramsDejArr = new URLSearchParams({ ...commonParams, names: 'Praha-Dejvice', mode: 'arrivals' });
 
-        // Použijeme allSettled místo all, aby jedna chyba neshodila vše
         const results = await Promise.allSettled([
             fetch(`https://api.golemio.cz/v2/pid/departureboards?${paramsVysDep}`, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } }),
             fetch(`https://api.golemio.cz/v2/pid/departureboards?${paramsVysArr}`, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } }),
@@ -22,18 +21,40 @@ export default async function handler(req, res) {
             fetch(`https://api.golemio.cz/v2/pid/departureboards?${paramsDejArr}`, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } })
         ]);
 
-        // Helper pro získání JSONu z výsledku
         const getData = async (result) => {
             if (result.status === 'fulfilled' && result.value.ok) {
                 return await result.value.json();
             }
-            return []; // Pokud selže, vrátíme prázdné pole
+            return []; 
         };
 
         const dataVysDep = await getData(results[0]);
         const dataVysArr = await getData(results[1]);
         const dataDejDep = await getData(results[2]);
         const dataDejArr = await getData(results[3]);
+
+        // --- DEBUG MÓD: Pokud je v URL ?debug=true, vrátíme surová data ---
+        if (req.query.debug) {
+            return res.status(200).json({
+                info: "Diagnostika API",
+                time_now: new Date().toISOString(),
+                stations_check: {
+                    vystaviste_odjezdy_count: dataVysDep.length,
+                    vystaviste_prijezdy_count: dataVysArr.length,
+                    dejvice_odjezdy_count: dataDejDep.length,
+                    dejvice_prijezdy_count: dataDejArr.length
+                },
+                api_status: {
+                    vystaviste_dep: results[0].status,
+                    vystaviste_arr: results[1].status,
+                    dejvice_dep: results[2].status,
+                    dejvice_arr: results[3].status
+                },
+                sample_train_vystaviste: dataVysDep[0] ? dataVysDep[0].trip.headsign : "Žádná data",
+                sample_train_dejvice: dataDejDep[0] ? dataDejDep[0].trip.headsign : "Žádná data"
+            });
+        }
+        // ---------------------------------------------------------------
 
         let bridgeSchedule = [];
         let processedTrains = new Set(); 
@@ -79,7 +100,7 @@ export default async function handler(req, res) {
             const dest = item.trip.headsign;
             if (!processedTrains.has(trainNum) && (dest.includes('Masaryk') || dest.includes('Bubny') || dest.includes('Hlavní') || dest.includes('Praha'))) {
                 const scheduledTime = new Date(item.departure_timestamp.predicted);
-                const bridgeTime = new Date(scheduledTime.getTime() + (3 * 60000)); // +3 min
+                const bridgeTime = new Date(scheduledTime.getTime() + (3 * 60000)); 
 
                 bridgeSchedule.push({
                     type: 'inbound',
@@ -97,7 +118,7 @@ export default async function handler(req, res) {
             const dest = item.trip.headsign;
             if (!processedTrains.has(trainNum) && !dest.includes('Masaryk') && !dest.includes('Bubny') && !dest.includes('Hlavní')) {
                 const scheduledTime = new Date(item.arrival_timestamp.predicted);
-                const bridgeTime = new Date(scheduledTime.getTime() - (3 * 60000)); // -3 min
+                const bridgeTime = new Date(scheduledTime.getTime() - (3 * 60000)); 
 
                 bridgeSchedule.push({
                     type: 'outbound',
