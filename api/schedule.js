@@ -4,70 +4,78 @@ export default async function handler(req, res) {
     try {
         const commonParams = {
             minutesBefore: 60, 
-            minutesAfter: 720, // Hledáme 12 hodin dopředu, abychom našli ranní spoje
+            minutesAfter: 720, 
             limit: 100,
             includeDelay: true 
         };
 
-        // Zkusíme více variant názvů zastávek, abychom měli jistotu
-        const stationNames = 'Praha-Výstaviště,Praha-Holešovice zastávka,Praha-Bubny';
-        const dejviceName = 'Praha-Dejvice';
+        // POUŽIJEME CIS ID MÍSTO NÁZVŮ (JISTOTA)
+        // 543368 = Praha-Výstaviště
+        // 545439 = Praha-Dejvice
+        const paramsVysDep = new URLSearchParams({ ...commonParams, cisIds: '543368', mode: 'departures' });
+        const paramsVysArr = new URLSearchParams({ ...commonParams, cisIds: '543368', mode: 'arrivals' });
+        const paramsDejDep = new URLSearchParams({ ...commonParams, cisIds: '545439', mode: 'departures' });
+        const paramsDejArr = new URLSearchParams({ ...commonParams, cisIds: '545439', mode: 'arrivals' });
 
-        const paramsMainDep = new URLSearchParams({ ...commonParams, names: stationNames, mode: 'departures' });
-        const paramsMainArr = new URLSearchParams({ ...commonParams, names: stationNames, mode: 'arrivals' });
-        const paramsDejDep = new URLSearchParams({ ...commonParams, names: dejviceName, mode: 'departures' });
-        const paramsDejArr = new URLSearchParams({ ...commonParams, names: dejviceName, mode: 'arrivals' });
-
-        const results = await Promise.allSettled([
-            fetch(`https://api.golemio.cz/v2/pid/departureboards?${paramsMainDep}`, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } }),
-            fetch(`https://api.golemio.cz/v2/pid/departureboards?${paramsMainArr}`, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } }),
-            fetch(`https://api.golemio.cz/v2/pid/departureboards?${paramsDejDep}`, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } }),
-            fetch(`https://api.golemio.cz/v2/pid/departureboards?${paramsDejArr}`, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } })
-        ]);
-
-        const getData = async (result) => {
-            if (result.status === 'fulfilled' && result.value.ok) {
-                return await result.value.json();
+        // Pomocná funkce, která vrátí buď data, nebo objekt s chybou
+        const fetchUrl = async (url) => {
+            try {
+                const response = await fetch(url, { headers: { 'X-Access-Token': GOLEMIO_API_KEY } });
+                if (!response.ok) {
+                    const text = await response.text();
+                    return { error: true, status: response.status, text: text };
+                }
+                return await response.json();
+            } catch (e) {
+                return { error: true, message: e.message };
             }
-            return []; 
         };
 
-        const dataMainDep = await getData(results[0]);
-        const dataMainArr = await getData(results[1]);
-        const dataDejDep = await getData(results[2]);
-        const dataDejArr = await getData(results[3]);
+        // Paralelní dotazy
+        const [dataVysDep, dataVysArr, dataDejDep, dataDejArr] = await Promise.all([
+            fetchUrl(`https://api.golemio.cz/v2/pid/departureboards?${paramsVysDep}`),
+            fetchUrl(`https://api.golemio.cz/v2/pid/departureboards?${paramsVysArr}`),
+            fetchUrl(`https://api.golemio.cz/v2/pid/departureboards?${paramsDejDep}`),
+            fetchUrl(`https://api.golemio.cz/v2/pid/departureboards?${paramsDejArr}`)
+        ]);
 
         // --- DEBUG MÓD ---
         if (req.query.debug) {
+            // Helper function to format output or show error
+            const formatDebug = (data) => data.error ? `CHYBA: ${data.status} - ${data.text}` : `${data.length} spojů`;
+
             return res.status(200).json({
-                info: "Diagnostika API v2",
-                server_time_utc: new Date().toISOString(),
-                local_time_prague_approx: new Date(new Date().getTime() + 3600000).toISOString(),
-                stations_searched: stationNames,
-                check: {
-                    vystaviste_bubny_odjezdy: dataMainDep.length,
-                    vystaviste_bubny_prijezdy: dataMainArr.length,
-                    dejvice_odjezdy: dataDejDep.length,
-                    dejvice_prijezdy: dataDejArr.length
+                info: "Diagnostika API v3 (CIS IDs)",
+                config: {
+                    vystaviste_id: '543368',
+                    dejvice_id: '545439'
                 },
-                urls: {
-                    main_dep: `.../departureboards?${paramsMainDep}`,
-                    dejvice_dep: `.../departureboards?${paramsDejDep}`
+                results: {
+                    vystaviste_odjezdy: formatDebug(dataVysDep),
+                    vystaviste_prijezdy: formatDebug(dataVysArr),
+                    dejvice_odjezdy: formatDebug(dataDejDep),
+                    dejvice_prijezdy: formatDebug(dataDejArr)
                 },
-                sample_data: dataMainDep.slice(0, 2).map(t => ({ train: t.trip.short_name, headsign: t.trip.headsign, time: t.departure_timestamp.predicted }))
+                sample_data: !dataVysDep.error && dataVysDep.length > 0 ? dataVysDep[0] : "Žádná data nebo chyba"
             });
         }
         // -----------------
 
+        // Pokud některý dotaz selhal, nahradíme ho prázdným polem, aby aplikace nespadla
+        const safeList = (data) => Array.isArray(data) ? data : [];
+
+        const listVysDep = safeList(dataVysDep);
+        const listVysArr = safeList(dataVysArr);
+        const listDejDep = safeList(dataDejDep);
+        const listDejArr = safeList(dataDejArr);
+
         let bridgeSchedule = [];
         let processedTrains = new Set(); 
 
-        // 1. VÝSTAVIŠTĚ / BUBNY (Preferovaná data)
-        // Směr Z Prahy (Odjezdy)
-        dataMainDep.forEach(item => {
+        // 1. VÝSTAVIŠTĚ (ID 543368)
+        listVysDep.forEach(item => {
             const dest = item.trip.headsign;
-            // Filtrujeme vlaky jedoucí ven (ne na Masaryčku/Hlavák)
-            if (!dest.includes('Masaryk') && !dest.includes('Hlavní') && item.stop.name.includes('Výstaviště')) {
+            if (!dest.includes('Masaryk') && !dest.includes('Bubny') && !dest.includes('Hlavní')) {
                 const bridgeTime = new Date(item.departure_timestamp.predicted);
                 const trainNum = item.trip.short_name;
                 
@@ -82,10 +90,9 @@ export default async function handler(req, res) {
             }
         });
 
-        // Směr DO Prahy (Příjezdy)
-        dataMainArr.forEach(item => {
+        listVysArr.forEach(item => {
             const dest = item.trip.headsign;
-            if ((dest.includes('Masaryk') || dest.includes('Hlavní') || dest.includes('Praha')) && item.stop.name.includes('Výstaviště')) {
+            if (dest.includes('Masaryk') || dest.includes('Bubny') || dest.includes('Hlavní') || dest.includes('Praha')) {
                 const bridgeTime = new Date(item.arrival_timestamp.predicted);
                 const trainNum = item.trip.short_name;
 
@@ -100,13 +107,12 @@ export default async function handler(req, res) {
             }
         });
 
-        // 2. DEJVICE (Záloha pro Rychlíky co nestaví na Výstavišti)
-        // Směr DO Prahy (Odjezd z Dejvic -> Most)
-        dataDejDep.forEach(item => {
+        // 2. DEJVICE (ID 545439)
+        listDejDep.forEach(item => {
             const trainNum = item.trip.short_name;
             const dest = item.trip.headsign;
-
-            if (!processedTrains.has(trainNum) && (dest.includes('Masaryk') || dest.includes('Hlavní') || dest.includes('Praha'))) {
+            // Vlaky DO centra, co jsme ještě nenašli (rychlíky)
+            if (!processedTrains.has(trainNum) && (dest.includes('Masaryk') || dest.includes('Bubny') || dest.includes('Hlavní') || dest.includes('Praha'))) {
                 const scheduledTime = new Date(item.departure_timestamp.predicted);
                 const bridgeTime = new Date(scheduledTime.getTime() + (3 * 60000)); // +3 min
 
@@ -121,11 +127,10 @@ export default async function handler(req, res) {
             }
         });
 
-        // Směr Z Prahy (Příjezd do Dejvic <- Most)
-        dataDejArr.forEach(item => {
+        listDejArr.forEach(item => {
             const trainNum = item.trip.short_name;
             const dest = item.trip.headsign;
-
+            // Vlaky Z centra, co jsme ještě nenašli
             if (!processedTrains.has(trainNum) && !dest.includes('Masaryk') && !dest.includes('Hlavní')) {
                 const scheduledTime = new Date(item.arrival_timestamp.predicted);
                 const bridgeTime = new Date(scheduledTime.getTime() - (3 * 60000)); // -3 min
