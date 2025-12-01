@@ -3,10 +3,10 @@ export default async function handler(req, res) {
 
     try {
         const commonParams = {
-            minutesBefore: 60, 
-            minutesAfter: 720, 
-            limit: 100,
-            includeDelay: true 
+            // OPRAVA: Sníženo na 30 minut (API limit) a odstraněno 'includeDelay' (neexistující parametr)
+            minutesBefore: 30, 
+            minutesAfter: 180, 
+            limit: 100
         };
 
         // POUŽIJEME CIS ID MÍSTO NÁZVŮ (JISTOTA)
@@ -41,11 +41,10 @@ export default async function handler(req, res) {
 
         // --- DEBUG MÓD ---
         if (req.query.debug) {
-            // Helper function to format output or show error
             const formatDebug = (data) => data.error ? `CHYBA: ${data.status} - ${data.text}` : `${data.length} spojů`;
 
             return res.status(200).json({
-                info: "Diagnostika API v3 (CIS IDs)",
+                info: "Diagnostika API v4 (Oprava parametrů)",
                 config: {
                     vystaviste_id: '543368',
                     dejvice_id: '545439'
@@ -61,7 +60,6 @@ export default async function handler(req, res) {
         }
         // -----------------
 
-        // Pokud některý dotaz selhal, nahradíme ho prázdným polem, aby aplikace nespadla
         const safeList = (data) => Array.isArray(data) ? data : [];
 
         const listVysDep = safeList(dataVysDep);
@@ -111,7 +109,6 @@ export default async function handler(req, res) {
         listDejDep.forEach(item => {
             const trainNum = item.trip.short_name;
             const dest = item.trip.headsign;
-            // Vlaky DO centra, co jsme ještě nenašli (rychlíky)
             if (!processedTrains.has(trainNum) && (dest.includes('Masaryk') || dest.includes('Bubny') || dest.includes('Hlavní') || dest.includes('Praha'))) {
                 const scheduledTime = new Date(item.departure_timestamp.predicted);
                 const bridgeTime = new Date(scheduledTime.getTime() + (3 * 60000)); // +3 min
@@ -130,7 +127,6 @@ export default async function handler(req, res) {
         listDejArr.forEach(item => {
             const trainNum = item.trip.short_name;
             const dest = item.trip.headsign;
-            // Vlaky Z centra, co jsme ještě nenašli
             if (!processedTrains.has(trainNum) && !dest.includes('Masaryk') && !dest.includes('Hlavní')) {
                 const scheduledTime = new Date(item.arrival_timestamp.predicted);
                 const bridgeTime = new Date(scheduledTime.getTime() - (3 * 60000)); // -3 min
