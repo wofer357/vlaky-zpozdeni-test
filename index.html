@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kdy jede vlak?</title>
+    
+    <!-- FAVICON A IKONA -->
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="favicon.png">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- VERCEL ANALYTICS IMPLEMENTATION -->
+    <script type="module">
+      import { inject } from 'https://cdn.jsdelivr.net/npm/@vercel/analytics/+esm';
+      inject();
+    </script>
+    <!-- END VERCEL ANALYTICS -->
+
+    <style>
+        :root {
+            --poster-yellow: #FFD600;
+            --poster-black: #1a1a1a;
+            --paper-white: #ffffff;
+            --alert-red: #D32F2F;
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .widget-card {
+            background-color: var(--poster-yellow);
+            width: 100%;
+            max-width: 380px;
+            height: 560px; /* Pevná výška pro lepší fungování modalu */
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+            overflow: hidden;
+            position: relative;
+            color: var(--poster-black);
+            border: 4px solid var(--poster-black);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HEADER */
+        .widget-header {
+            padding: 20px 24px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-shrink: 0;
+        }
+
+        .location-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 1px;
+            opacity: 0.8;
+            margin: 0;
+            max-width: 70%; /* Aby text nelezl do odznaku */
+        }
+
+        .day-indicator {
+            font-size: 12px;
+            font-weight: 700;
+            background: var(--poster-black);
+            color: var(--poster-yellow);
+            padding: 4px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        /* SCROLL AREA */
+        .content-scroll {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            /* Skrytí posuvníku pro čistší vzhled */
+            scrollbar-width: none; 
+            -ms-overflow-style: none;
+        }
+        .content-scroll::-webkit-scrollbar { 
+            display: none; 
+        }
+
+        .countdown-section {
+            text-align: center;
+            padding: 10px 0 30px;
+        }
+
+        .countdown-time {
+            font-size: 72px;
+            font-weight: 800;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -2px;
+            position: relative;
+            display: inline-block;
+        }
+
+        .countdown-label {
+            font-size: 16px;
+            font-weight: 600;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .delay-badge {
+            font-size: 16px;
+            background: var(--alert-red);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            vertical-align: top;
+            margin-left: 5px;
+            display: none; /* Skryté dokud není zpoždění */
+            position: absolute;
+            top: 10px;
+            right: -60px;
+            transform: rotate(5deg);
+        }
+
+        /* INFO BOX */
+        .info-box {
+            background: var(--paper-white);
+            margin: 0 16px 16px;
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 2px solid var(--poster-black);
+        }
+
+        .primary-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px dashed #eee;
+            padding-bottom: 15px;
+        }
+
+        .train-destination {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .train-departure-time {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--poster-black);
+            background: #eee;
+            padding: 4px 10px;
+            border-radius: 8px;
+        }
+
+        /* NEXT LIST */
+        .next-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .list-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .next-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            font-weight: 500;
+            color: #444;
+            padding: 4px 0;
+        }
+        
+        .next-item span:last-child {
+            font-weight: 700;
+            color: var(--poster-black);
+        }
+
+        .tag-tomorrow {
+            font-size: 0.6em;
+            vertical-align: middle;
+            background: #eee;
+            color: #666;
+            padding: 2px 4px;
+            border-radius: 4px;
+            margin-left: 5px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .empty-state {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .empty-state-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        /* FOOTER */
+        .footer {
+            text-align: center;
+            padding: 12px;
+            font-size: 11px;
+            opacity: 0.6;
+            font-weight: 600;
+            background: var(--poster-yellow);
+            border-top: 1px solid rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        .footer-link {
+            display: inline-block;
+            margin-left: 8px;
+            padding-left: 8px;
+            border-left: 1px solid rgba(0,0,0,0.3);
+            cursor: pointer;
+            text-decoration: underline;
+            color: var(--poster-black);
+        }
+
+        /* --- MODAL (FULL SCHEDULE & INFO) --- */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--paper-white);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .modal-overlay.open {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: var(--poster-yellow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 4px solid var(--poster-black);
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+            text-transform: uppercase;
+        }
+
+        .close-btn {
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--poster-black);
+            color: var(--poster-yellow);
+            border-radius: 50%;
+        }
+
+        .modal-body {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        /* INFO CONTENT STYLES */
+        .info-content {
+            padding: 24px;
+            font-size: 15px;
+            line-height: 1.5;
+            color: #333;
+        }
+        .info-content p {
+            margin-bottom: 15px;
+        }
+        .info-content a {
+            color: var(--poster-black);
+            font-weight: 700;
+            text-decoration: underline;
+        }
+        .disclaimer-box {
+            background: #f8f8f8;
+            border-left: 4px solid var(--poster-black);
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        /* TABLE */
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .schedule-table th {
+            text-align: left;
+            padding: 12px 15px;
+            position: sticky;
+            top: 0;
+            background: #f8f8f8;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            border-bottom: 1px solid #ddd;
+            z-index: 2;
+        }
+
+        .schedule-table td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .time-col { font-weight: 800; width: 60px; }
+        .dest-col { font-weight: 500; }
+        .days-col { text-align: right; width: 90px; }
+
+        /* VISUALIZATION DOTS */
+        .days-grid {
+            display: flex;
+            gap: 3px;
+            justify-content: flex-end;
+        }
+        .day-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            display: inline-block;
+        }
+        .day-dot.active { background: #333; }
+        .day-dot.holiday-dot { border-radius: 1px; } /* Square for holiday */
+        .day-dot.holiday-dot.active { background: var(--alert-red); }
+        
+        .legend {
+            font-size: 10px;
+            color: #888;
+            padding: 8px 15px;
+            text-align: right;
+            background: #fafafa;
+            border-bottom: 1px solid #eee;
+        }
+
+        /* MEDIA QUERIES */
+        @media (max-width: 480px) {
+            body {
+                align-items: flex-start; /* Zarovná kartu nahoru místo na střed */
+                padding-top: 20px; /* Menší mezera od horního okraje */
+            }
+            .countdown-time { font-size: 60px; }
+            .widget-header { padding: 15px 20px 5px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="widget-card">
+        
+        <!-- HEADER -->
+        <div class="widget-header">
+            <h1 class="location-title">Kdy projede vlak?</h1>
+            <div id="day-badge" class="day-indicator">Dnes</div>
+        </div>
+
+        <!-- SCROLLABLE CONTENT (Main View) -->
+        <div class="content-scroll">
+            <div id="active-view">
+                <div class="countdown-section">
+                    <div style="position:relative; display:inline-block;">
+                        <div id="countdown" class="countdown-time">--</div>
+                        <div id="delay-badge" class="delay-badge"></div>
+                    </div>
+                    <div id="status-text" class="countdown-label">Minut do průjezdu</div>
+                </div>
+
+                <div class="info-box">
+                    <div class="primary-info">
+                        <div>
+                            <div style="font-size: 12px; color:#666; margin-bottom:4px;">SMĚR</div>
+                            <div id="next-dir" class="train-destination">--</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color:#666; margin-bottom:4px; text-align:right;">PRŮJEZD</div>
+                            <div id="next-time" class="train-departure-time">--:--</div>
+                        </div>
+                    </div>
+
+                    <div class="next-list">
+                        <div class="list-label">Následující spoje</div>
+                        <div id="upcoming-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="empty-view" class="empty-state">
+                <span class="empty-state-icon">😴</span>
+                <strong>Žádné spoje</strong>
+                <p style="font-size: 14px; opacity: 0.8; margin-top:5px;">Nenalezeny žádné vlaky pro dnešek ani zítřek.</p>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            Automatická aktualizace
+            <span class="footer-link" onclick="openSchedule()">Celý rozvrh</span>
+            <span class="footer-link" onclick="openInfo()">O co jde?</span>
+        </div>
+
+        <!-- FULL SCHEDULE MODAL -->
+        <div id="schedule-modal" class="modal-overlay">
+            <div class="modal-header">
+                <h2>Celý jízdní řád</h2>
+                <div class="close-btn" onclick="closeSchedule()">×</div>
+            </div>
+            <div class="legend">
+                <span>● Po-Ne</span>
+                <span style="margin-left:8px; color:var(--alert-red)">■ Svátek</span>
+            </div>
+            <div class="modal-body">
+                <table class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Čas</th>
+                            <th>Směr</th>
+                            <th style="text-align:right">Dny</th>
+                        </tr>
+                    </thead>
+                    <tbody id="full-schedule-body">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- INFO MODAL -->
+        <div id="info-modal" class="modal-overlay">
+            <div class="modal-header">
+                <h2>Více informací</h2>
+                <div class="close-btn" onclick="closeInfo()">×</div>
+            </div>
+            <div class="modal-body">
+                <div class="info-content">
+                    <p>
+                        Chodíte s dětmi mávat vlakům z mostu pod AVU? Nevíte, zda ještě můžete pozorovat veverky, nebo už máte přidat do kroku, abyste stihli průjezd vlaku? Neznáte jízdní řády z paměti?
+                    </p>
+                    <p>
+                        Tak to jsme na tom stejně. A proto jsem si nechal od AI udělat tuto jednoduchou stránku s jízdními řády, vycházející ze skvělé tabulky, která visí na mostě.
+                    </p>
+                    <p>
+                        Třeba se také někomu bude hodit! 🚂
+                    </p>
+                    <p>
+                        <strong>Přesná lokalita:</strong><br>
+                        <a href="https://mapy.cz/s/dadelenera" target="_blank">Otevřít na Mapy.cz</a>
+                    </p>
+                    
+                    <div class="disclaimer-box">
+                        <strong>Upozornění:</strong><br>
+                        Jedná se o nejdřívější čas průjezdu vlaku. Vlaky většinou jedou o 1-2 minuty později.<br>
+                        <br>
+                        <em>Aplikace nově zohledňuje aktuální zpoždění (pokud jsou data dostupná).</em>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- DATA -->
+    <script id="csv-data" type="text/csv">
+Čas,Směr,Vlak,1,2,3,4,5,6,7,Svátek
+0:49,Dejvice,9848,x,x,x,x,x,x,x,x
+4:49,Výstav.,9851,x,x,x,x,x,x,x,x
+4:59,Výstav.,19731,x,x,x,x,x,x,x,x
+5:21,Dejvice,9800,x,x,x,x,x,-,-,-
+5:24,Výstav.,9853,-,-,-,-,-,x,x,x
+5:30,Výstav.,9855,x,x,x,x,x,-,-,-
+5:33,Dejvice,9802,-,-,-,-,-,x,x,x
+5:58,Výstav.,9811,x,x,x,x,x,-,-,-
+6:02,Dejvice,19732,x,x,x,x,x,-,-,-
+6:13,Výstav.,Sp 1561,x,x,x,x,x,-,-,-
+6:16,Dejvice,19734,-,-,-,-,-,x,x,x
+6:25,Výstav.,9801,x,x,x,x,x,x,x,x
+6:37,Výstav.,R1231,x,x,x,x,x,x,-,-
+6:40,Dejvice,9810,x,x,x,x,x,-,-,-
+6:42,Dejvice,9852,-,-,-,-,-,x,x,x
+7:00,Výstav.,9813,x,x,x,x,x,-,-,-
+7:07,Dejvice,R1230,x,x,x,x,x,x,x,x
+7:12,Výstav.,Sp 1560,x,x,x,x,x,-,-,-
+7:13,Výstav.,9859,-,-,-,-,-,x,x,x
+7:28,Výstav.,9815,x,x,x,x,x,-,-,-
+7:36,Dejvice,9812,x,x,x,x,x,x,x,x
+7:47,Výstav.,Sp 1565,x,x,x,x,x,x,x,x
+8:08,Dejvice,Sp 1562,x,x,x,x,x,x,x,x
+8:13,Výstav.,9815,x,x,x,x,x,x,x,x
+8:29,Výstav.,Sp 1567,x,x,x,x,x,-,-,-
+8:36,Dejvice,9854,x,x,x,x,x,x,x,x
+8:47,Výstav.,R1233,x,x,x,x,x,x,x,x
+9:07,Dejvice,R1232,x,x,x,x,x,x,x,x
+9:13,Výstav.,9819,x,x,x,x,x,x,x,x
+9:36,Dejvice,9814,x,x,x,x,x,x,x,x
+9:47,Výstav.,Sp 1569,x,x,x,x,x,x,x,x
+10:07,Dejvice,Sp 1564,x,x,x,x,x,x,x,x
+10:13,Výstav.,9821,x,x,x,x,x,x,x,x
+10:36,Dejvice,9856,x,x,x,x,x,x,x,x
+10:47,Výstav.,R1235,x,x,x,x,x,x,x,x
+11:07,Dejvice,Sp 1566,x,x,x,x,x,x,x,x
+11:13,Výstav.,Sp 1590,x,x,x,x,x,x,x,x
+11:36,Dejvice,9861,x,x,x,x,x,x,x,x
+11:47,Výstav.,Sp 1571,x,x,x,x,x,x,x,x
+12:07,Dejvice,Sp 1568,x,x,x,x,x,x,x,x
+12:13,Výstav.,9823,x,x,x,x,x,x,x,x
+12:36,Dejvice,9818,x,x,x,x,x,x,x,x
+12:47,Výstav.,Sp 1573,x,x,x,x,x,x,x,x
+13:07,Dejvice,R1234,x,x,x,x,x,x,x,x
+13:13,Výstav.,9863,x,x,x,x,x,x,x,x
+13:36,Dejvice,9820,x,x,x,x,x,x,x,x
+13:47,Výstav.,Sp 1575,x,x,x,x,x,x,x,x
+14:07,Dejvice,Sp 1570,x,x,x,x,x,x,x,x
+14:13,Výstav.,9825,x,x,x,x,x,x,x,x
+14:36,Dejvice,9822,x,x,x,x,x,x,x,x
+14:47,Výstav.,R1237,x,x,x,x,x,x,x,x
+15:07,Dejvice,R1236,x,x,x,x,x,x,x,x
+15:13,Výstav.,9827,x,x,x,x,x,x,x,x
+15:23,Dejvice,Sp1572,x,x,x,x,x,-,-,-
+15:36,Dejvice,9824,x,x,x,x,x,x,x,x
+15:47,Výstav.,Sp 1577,x,x,x,x,x,x,x,x
+16:07,Dejvice,9819,x,x,x,x,x,x,x,x
+16:13,Výstav.,9829,x,x,x,x,x,x,x,x
+16:23,Dejvice,Sp 1576,x,x,x,x,x,-,-,-
+16:36,Dejvice,9826,x,x,x,x,x,x,x,x
+16:47,Výstav.,R1239,x,x,x,x,x,x,x,x
+16:47,Dejvice,19736,x,x,x,x,x,x,x,x
+17:07,Dejvice,R1238,x,x,x,x,x,x,x,x
+17:13,Výstav.,9831,x,x,x,x,x,x,x,x
+17:23,Dejvice,Sp 1578,x,x,x,x,x,-,-,-
+17:36,Dejvice,9828,x,x,x,x,x,x,x,x
+17:47,Výstav.,Sp 1579,x,x,x,x,x,x,x,x
+18:07,Dejvice,Sp 1580,x,x,x,x,x,x,x,x
+18:13,Výstav.,9833,x,x,x,x,x,x,x,x
+18:23,Dejvice,Sp 1582,x,x,x,x,x,-,-,-
+18:29,Výstav.,19737,x,x,x,x,x,x,x,x
+18:36,Dejvice,9830,x,x,x,x,x,x,x,x
+18:47,Výstav.,R1241,x,x,x,x,x,x,x,x
+19:07,Dejvice,R1240,x,x,x,x,x,x,x,x
+19:13,Výstav.,9835,x,x,x,x,x,x,x,x
+19:36,Dejvice,9832,x,x,x,x,x,x,x,x
+19:47,Výstav.,Sp 1581,x,x,x,x,x,x,x,x
+20:07,Dejvice,Sp 1584,x,x,x,x,x,x,x,x
+20:13,Výstav.,9837,x,x,x,x,x,x,x,x
+20:36,Dejvice,9858,x,x,x,x,x,x,x,x
+20:46,Výstav.,R1243,-,-,-,-,-,-,x,x
+21:07,Dejvice,Sp 1586,x,x,x,x,x,-,x,x
+21:13,Výstav.,R1242,x,x,x,x,x,x,x,x
+21:36,Dejvice,9860,x,x,x,x,x,x,x,x
+21:47,Výstav.,Sp 1583,x,x,x,x,x,x,x,x
+22:07,Dejvice,Sp 1588,x,x,x,x,x,x,x,x
+22:13,Výstav.,9841,x,x,x,x,x,x,x,x
+22:36,Dejvice,9834,x,x,x,x,x,x,x,x
+23:17,Výstav.,9865,x,x,x,x,x,x,x,x
+23:46,Dejvice,9862,x,x,x,x,x,x,x,x
+23:54,Výstav.,9807,x,x,x,x,x,-,-,-
+    </script>
+
+    <script>
+        // --- 1. Výpočet svátků (Automaticky) ---
+        function getEasterSunday(year) {
+            const f = Math.floor,
+                G = year % 19,
+                C = f(year / 100),
+                H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30,
+                I = H - f(H / 28) * (1 - f(29 / (H + 1)) * f((21 - G) / 11)),
+                J = (year + f(year / 4) + I + 2 - C + f(C / 4)) % 7,
+                L = I - J,
+                month = 3 + f((L + 40) / 44),
+                day = L + 28 - 31 * f(month / 4);
+            return new Date(year, month - 1, day);
+        }
+
+        function getCzechHolidays(year) {
+            const fixedHolidays = [
+                "01-01", "05-01", "05-08", "07-05", "07-06", 
+                "09-28", "10-28", "11-17", "12-24", "12-25", "12-26"
+            ].map(d => `${year}-${d}`);
+
+            const easterSunday = getEasterSunday(year);
+            const goodFriday = new Date(easterSunday);
+            goodFriday.setDate(easterSunday.getDate() - 2);
+            const easterMonday = new Date(easterSunday);
+            easterMonday.setDate(easterSunday.getDate() + 1);
+
+            const formatDate = (date) => {
+                const y = date.getFullYear();
+                const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                const d = date.getDate().toString().padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            };
+
+            return [...fixedHolidays, formatDate(goodFriday), formatDate(easterMonday)];
+        }
+
+        function isHoliday(date) {
+            const year = date.getFullYear();
+            const holidays = getCzechHolidays(year);
+            const checkDate = date.getFullYear() + '-' + 
+                              (date.getMonth() + 1).toString().padStart(2, '0') + '-' + 
+                              date.getDate().toString().padStart(2, '0');
+            return holidays.includes(checkDate);
+        }
+
+        function getDayNameCZ() {
+            const days = ["Neděle", "Pondělí", "Úterý", "Středa", "Čtvrtek", "Pátek", "Sobota"];
+            return days[new Date().getDay()];
+        }
+
+        // --- 2. Parsování CSV ---
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n');
+            if (lines.length < 2) return [];
+            const [headerLine, ...dataLines] = lines;
+            const headers = headerLine.split(',').map(h => h.trim());
+            const headerMap = {
+                'Čas': 0, 'Směr': 1, 'Vlak': 2,
+                '1': 3, '2': 4, '3': 5, '4': 6, '5': 7,
+                '6': 8, '7': 9, 'Svátek': 10
+            };
+
+            return dataLines.map(line => {
+                const values = line.split(',').map(v => v.trim());
+                if (values.length !== headers.length) return null;
+                return {
+                    time: values[headerMap['Čas']],
+                    direction: values[headerMap['Směr']],
+                    train: values[headerMap['Vlak']],
+                    days: {
+                        1: values[headerMap['1']], 2: values[headerMap['2']], 3: values[headerMap['3']],
+                        4: values[headerMap['4']], 5: values[headerMap['5']], 6: values[headerMap['6']],
+                        7: values[headerMap['7']],
+                        holiday: values[headerMap['Svátek']]
+                    }
+                };
+            }).filter(item => item !== null);
+        }
+
+        let parsedSchedule = []; // Cache
+        let currentDelay = 0; // State for delay
+        let lastFetchedTrain = null; // Cache to prevent over-fetching
+
+        // --- 3. Hlavní logika aktualizace ---
+        async function updateWidget() {
+            try {
+                if(parsedSchedule.length === 0) {
+                    const csvContent = document.getElementById('csv-data').textContent;
+                    parsedSchedule = parseCSV(csvContent);
+                }
+                const schedule = parsedSchedule;
+                
+                const now = new Date();
+                const nowInMinutes = now.getHours() * 60 + now.getMinutes();
+
+                // Dnešek
+                let todayIndex = now.getDay() === 0 ? 7 : now.getDay();
+                let todayIsHoliday = isHoliday(now);
+
+                // Zítřek
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+                let tomorrowIndex = tomorrow.getDay() === 0 ? 7 : tomorrow.getDay();
+                let tomorrowIsHoliday = isHoliday(tomorrow);
+
+                // Filtrace
+                const trainsToday = schedule.filter(item => {
+                    const [h, m] = item.time.split(':').map(Number);
+                    const depMins = h * 60 + m;
+                    // Keep past trains for a bit if they are delayed? For simplicity, strict schedule check
+                    // But we want to see trains that "should have left" but are late?
+                    // Basic logic: show upcoming based on schedule
+                    if (depMins < nowInMinutes) return false; 
+
+                    if (todayIsHoliday) return item.days.holiday === 'x';
+                    return item.days[todayIndex] === 'x';
+                }).map(t => ({ ...t, date: now, isTomorrow: false }));
+
+                const trainsTomorrow = schedule.filter(item => {
+                    if (tomorrowIsHoliday) return item.days.holiday === 'x';
+                    return item.days[tomorrowIndex] === 'x';
+                }).map(t => ({ ...t, date: tomorrow, isTomorrow: true }));
+
+                const upcomingTrains = [...trainsToday, ...trainsTomorrow];
+                
+                // UI
+                document.getElementById("day-badge").textContent = getDayNameCZ() + (todayIsHoliday ? " (Svátek)" : "");
+
+                const activeView = document.getElementById("active-view");
+                const emptyView = document.getElementById("empty-view");
+
+                if (upcomingTrains.length === 0) {
+                    activeView.style.display = "none";
+                    emptyView.style.display = "block";
+                    return;
+                }
+
+                activeView.style.display = "block";
+                emptyView.style.display = "none";
+
+                const nextTrain = upcomingTrains[0];
+                const [nextH, nextM] = nextTrain.time.split(":").map(Number);
+                const nextDate = new Date(nextTrain.date);
+                nextDate.setHours(nextH, nextM, 0);
+
+                // --- DELAY FETCHING ---
+                // Only fetch if it's a new train or we haven't fetched in a while (logic simplified here)
+                // We fetch if the train ID changed, or every X seconds (handled by interval, but we need to be careful)
+                // For simplicity: We call fetchDelay every time but it throttles internally or just runs 
+                // Since this runs every 1s, we MUST throttle API calls.
+                // Let's create a throttle check.
+                if (nextTrain.train !== lastFetchedTrain || (new Date().getTime() % 60000 < 1000)) { // Fetch on change or every minute
+                     fetchDelay(nextTrain.train);
+                     lastFetchedTrain = nextTrain.train;
+                }
+
+                // Apply delay
+                const nextDateWithDelay = new Date(nextDate.getTime() + currentDelay * 60000);
+
+                const diffMs = nextDateWithDelay - now;
+                const diffMins = Math.floor(diffMs / 60000);
+
+                const countdownEl = document.getElementById("countdown");
+                const statusEl = document.getElementById("status-text");
+                const delayBadge = document.getElementById("delay-badge");
+
+                // Show Delay Badge
+                if (currentDelay > 0) {
+                    delayBadge.style.display = "block";
+                    delayBadge.textContent = `+${currentDelay} min`;
+                } else {
+                    delayBadge.style.display = "none";
+                }
+
+                if (diffMins <= 0) {
+                    countdownEl.textContent = "Právě teď";
+                    statusEl.textContent = "";
+                    countdownEl.style.fontSize = "50px";
+                    countdownEl.style.color = "var(--alert-red)";
+                } else if (diffMins >= 60) {
+                    const h = Math.floor(diffMins / 60);
+                    const m = diffMins % 60;
+                    countdownEl.textContent = `${h}:${m.toString().padStart(2, '0')}`;
+                    statusEl.textContent = "Hodin do průjezdu";
+                    countdownEl.style.fontSize = "60px";
+                    countdownEl.style.color = "var(--poster-black)";
+                } else {
+                    countdownEl.textContent = diffMins;
+                    statusEl.textContent = "Minut do průjezdu";
+                    countdownEl.style.fontSize = "80px";
+                    
+                    if (diffMins < 5) {
+                        countdownEl.style.color = "var(--alert-red)";
+                    } else {
+                        countdownEl.style.color = "var(--poster-black)";
+                    }
+                }
+
+                document.getElementById("next-dir").textContent = nextTrain.direction;
+                
+                const timeEl = document.getElementById("next-time");
+                timeEl.innerHTML = nextTrain.time;
+                if (nextTrain.isTomorrow) {
+                    timeEl.innerHTML += ' <span style="font-size:0.5em; vertical-align:middle; text-transform:uppercase; color:#666;">(Zítra)</span>';
+                }
+
+                const upcomingContainer = document.getElementById("upcoming-container");
+                upcomingContainer.innerHTML = "";
+                const nextFew = upcomingTrains.slice(1, 4);
+
+                if (nextFew.length === 0) {
+                    upcomingContainer.innerHTML = "<div style='color:#999; font-size:13px; font-style:italic;'>Žádné další spoje</div>";
+                } else {
+                    nextFew.forEach(train => {
+                        const row = document.createElement("div");
+                        row.className = "next-item";
+                        
+                        let timeHtml = train.time;
+                        if (train.isTomorrow) {
+                            timeHtml += `<span class="tag-tomorrow">Zítra</span>`;
+                        }
+
+                        row.innerHTML = `<span>${train.direction}</span> <span>${timeHtml}</span>`;
+                        upcomingContainer.appendChild(row);
+                    });
+                }
+            } catch (e) {
+                console.error("Chyba widgetu:", e);
+            }
+        }
+
+        async function fetchDelay(trainNumber) {
+            try {
+                // Remove spaces from train number (e.g. "Sp 1561" -> "1561" might be needed for matching? 
+                // Golemio usually uses just the number part for trip.short_name? 
+                // Or "Sp 1561". Let's try sending exact string first, backend can handle stripping.
+                // Actually Golemio trip.short_name is usually just "1561". 
+                // Let's strip letters just to be safe if matching fails.
+                
+                // Simple normalize: remove non-digits if needed, but R trains are just numbers usually in Golemio properties
+                // Let's send the raw value and let API handle or match loosely.
+                
+                // Correction: R1230 -> 1230. 
+                const cleanTrainNumber = trainNumber.replace(/\D/g, ''); 
+                
+                const response = await fetch(`/api/delay?train=${cleanTrainNumber}`);
+                if (!response.ok) return;
+                const data = await response.json();
+                
+                if (data.found) {
+                    currentDelay = data.delayMinutes;
+                } else {
+                    currentDelay = 0; // Not found -> assume on time or no data
+                }
+            } catch (e) {
+                console.warn("Failed to fetch delay", e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateWidget();
+            setInterval(updateWidget, 1000);
+        });
+    </script>
+</body>
+</html>
