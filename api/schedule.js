@@ -1,5 +1,9 @@
 export default async function handler(req, res) {
-    const GOLEMIO_API_KEY = process.env.GOLEMIO_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDI4MCwiaWF0IjoxNzY0NjI4NDcwLCJleHAiOjExNzY0NjI4NDcwLCJpc3MiOiJnb2xlbWlvIiwianRpIjoiODhiMDQ4MzktOGI1Yy00ZjQxLTkzOWItZTA5ZjZlZDVkODZmIn0.1nlLv3mu-eC2bt_AokvJSP3i-ri2yupS7TfIA4Upaog'; 
+    const GOLEMIO_API_KEY = process.env.GOLEMIO_API_KEY;
+
+    if (!GOLEMIO_API_KEY) {
+        return res.status(500).json({ error: 'Missing GOLEMIO_API_KEY' });
+    }
 
     // PID stop_ids from Golemio (using ids param instead of old cisIds)
     const STOP_VYSTAVISTE = 'U532Z301';
