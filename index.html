@@ -132,6 +132,18 @@
             transform: rotate(5deg);
         }
 
+        .delay-chip {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: var(--alert-red);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            vertical-align: middle;
+        }
+
         /* INFO BOX */
         .info-box {
             background: var(--paper-white);
@@ -517,10 +529,12 @@
                     const row = document.createElement("div");
                     row.className = "next-item";
                     
+                    const delayMinutes = train.delay || 0;
                     const t = new Date(train.time);
                     const tStr = `${t.getHours()}:${t.getMinutes().toString().padStart(2, '0')}`;
                     
-                    row.innerHTML = `<span>${train.direction}</span> <span>${tStr}</span>`;
+                    const delayHtml = delayMinutes > 0 ? `<span class="delay-chip">+${delayMinutes} min</span>` : "";
+                    row.innerHTML = `<span>${train.direction}</span> <span>${tStr} ${delayHtml}</span>`;
                     upcomingContainer.appendChild(row);
                 });
             }
