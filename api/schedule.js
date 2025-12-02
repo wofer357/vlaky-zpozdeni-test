@@ -142,7 +142,8 @@ export default async function handler(req, res) {
             const dest = item.trip.headsign;
             if (!processedTrains.has(trainNum) && !dest.includes('Masaryk') && !dest.includes('Hlavní')) {
                 const scheduledTime = new Date(item.arrival_timestamp.predicted);
-                const bridgeTime = new Date(scheduledTime.getTime() - (5 * 60000)); // -5 min
+                const offsetMinutes = trainNum.startsWith('Sp') ? 7 : 5; // Sp vlaky posuneme o 2 min více
+                const bridgeTime = new Date(scheduledTime.getTime() - (offsetMinutes * 60000));
 
                 bridgeSchedule.push({
                     type: 'outbound',
