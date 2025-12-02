@@ -124,7 +124,7 @@ export default async function handler(req, res) {
             const dest = item.trip.headsign;
             if (!processedTrains.has(trainNum) && (dest.includes('Masaryk') || dest.includes('Bubny') || dest.includes('Hlavní') || dest.includes('Praha'))) {
                 const scheduledTime = new Date(item.departure_timestamp.predicted);
-                const bridgeTime = new Date(scheduledTime.getTime() + (3 * 60000)); // +3 min
+                const bridgeTime = new Date(scheduledTime.getTime() + (5 * 60000)); // +5 min
 
                 bridgeSchedule.push({
                     type: 'inbound',
@@ -142,7 +142,7 @@ export default async function handler(req, res) {
             const dest = item.trip.headsign;
             if (!processedTrains.has(trainNum) && !dest.includes('Masaryk') && !dest.includes('Hlavní')) {
                 const scheduledTime = new Date(item.arrival_timestamp.predicted);
-                const bridgeTime = new Date(scheduledTime.getTime() - (3 * 60000)); // -3 min
+                const bridgeTime = new Date(scheduledTime.getTime() - (5 * 60000)); // -5 min
 
                 bridgeSchedule.push({
                     type: 'outbound',
