@@ -1,6 +1,10 @@
 export default async function handler(req, res) {
     const GOLEMIO_API_KEY = process.env.GOLEMIO_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDI4MCwiaWF0IjoxNzY0NjI4NDcwLCJleHAiOjExNzY0NjI4NDcwLCJpc3MiOiJnb2xlbWlvIiwianRpIjoiODhiMDQ4MzktOGI1Yy00ZjQxLTkzOWItZTA5ZjZlZDVkODZmIn0.1nlLv3mu-eC2bt_AokvJSP3i-ri2yupS7TfIA4Upaog'; 
 
+    // PID stop_ids from Golemio (using ids param instead of old cisIds)
+    const STOP_VYSTAVISTE = 'U532Z301';
+    const STOP_DEJVICE = 'U163Z301';
+
     try {
         const commonParams = {
             // OPRAVA: Sníženo na 30 minut (API limit) a odstraněno 'includeDelay' (neexistující parametr)
@@ -9,13 +13,10 @@ export default async function handler(req, res) {
             limit: 100
         };
 
-        // POUŽIJEME CIS ID MÍSTO NÁZVŮ (JISTOTA)
-        // 543368 = Praha-Výstaviště
-        // 545439 = Praha-Dejvice
-        const paramsVysDep = new URLSearchParams({ ...commonParams, cisIds: '543368', mode: 'departures' });
-        const paramsVysArr = new URLSearchParams({ ...commonParams, cisIds: '543368', mode: 'arrivals' });
-        const paramsDejDep = new URLSearchParams({ ...commonParams, cisIds: '545439', mode: 'departures' });
-        const paramsDejArr = new URLSearchParams({ ...commonParams, cisIds: '545439', mode: 'arrivals' });
+        const paramsVysDep = new URLSearchParams({ ...commonParams, ids: STOP_VYSTAVISTE, mode: 'departures' });
+        const paramsVysArr = new URLSearchParams({ ...commonParams, ids: STOP_VYSTAVISTE, mode: 'arrivals' });
+        const paramsDejDep = new URLSearchParams({ ...commonParams, ids: STOP_DEJVICE, mode: 'departures' });
+        const paramsDejArr = new URLSearchParams({ ...commonParams, ids: STOP_DEJVICE, mode: 'arrivals' });
 
         // Pomocná funkce, která vrátí buď data, nebo objekt s chybou
         const fetchUrl = async (url) => {
@@ -41,13 +42,19 @@ export default async function handler(req, res) {
 
         // --- DEBUG MÓD ---
         if (req.query.debug) {
-            const formatDebug = (data) => data.error ? `CHYBA: ${data.status} - ${data.text}` : `${data.length} spojů`;
+            const listCount = (data) => {
+                if (data?.error) return null;
+                if (Array.isArray(data)) return data.length;
+                if (Array.isArray(data?.departures)) return data.departures.length;
+                return 0;
+            };
+            const formatDebug = (data) => data.error ? `CHYBA: ${data.status} - ${data.text}` : `${listCount(data)} spojů`;
 
             return res.status(200).json({
                 info: "Diagnostika API v4 (Oprava parametrů)",
                 config: {
-                    vystaviste_id: '543368',
-                    dejvice_id: '545439'
+                    vystaviste_id: STOP_VYSTAVISTE,
+                    dejvice_id: STOP_DEJVICE
                 },
                 results: {
                     vystaviste_odjezdy: formatDebug(dataVysDep),
@@ -55,17 +62,23 @@ export default async function handler(req, res) {
                     dejvice_odjezdy: formatDebug(dataDejDep),
                     dejvice_prijezdy: formatDebug(dataDejArr)
                 },
-                sample_data: !dataVysDep.error && dataVysDep.length > 0 ? dataVysDep[0] : "Žádná data nebo chyba"
+                sample_data: !dataVysDep.error && Array.isArray(dataVysDep?.departures) && dataVysDep.departures.length > 0
+                    ? dataVysDep.departures[0]
+                    : "Žádná data nebo chyba"
             });
         }
         // -----------------
 
-        const safeList = (data) => Array.isArray(data) ? data : [];
+        const extractDepartures = (data) => {
+            if (Array.isArray(data)) return data; // legacy shape
+            if (data && Array.isArray(data.departures)) return data.departures;
+            return [];
+        };
 
-        const listVysDep = safeList(dataVysDep);
-        const listVysArr = safeList(dataVysArr);
-        const listDejDep = safeList(dataDejDep);
-        const listDejArr = safeList(dataDejArr);
+        const listVysDep = extractDepartures(dataVysDep);
+        const listVysArr = extractDepartures(dataVysArr);
+        const listDejDep = extractDepartures(dataDejDep);
+        const listDejArr = extractDepartures(dataDejArr);
 
         let bridgeSchedule = [];
         let processedTrains = new Set(); 
