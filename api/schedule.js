@@ -7,10 +7,10 @@ export default async function handler(req, res) {
 
     try {
         const commonParams = {
-            // OPRAVA: Sníženo na 30 minut (API limit) a odstraněno 'includeDelay' (neexistující parametr)
+            // 24h window ahead; keep 30 min back for context
             minutesBefore: 30, 
-            minutesAfter: 180, 
-            limit: 100
+            minutesAfter: 1440, 
+            limit: 400
         };
 
         const paramsVysDep = new URLSearchParams({ ...commonParams, ids: STOP_VYSTAVISTE, mode: 'departures' });
