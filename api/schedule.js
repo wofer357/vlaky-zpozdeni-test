@@ -113,7 +113,7 @@ export default async function handler(req, res) {
 
                 bridgeSchedule.push({
                     type: 'inbound',
-                    direction: 'Výstav.',
+                    direction: 'Výstaviště',
                     train: trainNum,
                     time: bridgeTime.toISOString(),
                     delay: item.delay.minutes
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
 
                 bridgeSchedule.push({
                     type: 'inbound',
-                    direction: 'Výstav.',
+                    direction: 'Výstaviště',
                     train: trainNum,
                     time: bridgeTime.toISOString(),
                     delay: item.delay.minutes
